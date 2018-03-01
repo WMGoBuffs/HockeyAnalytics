@@ -2,8 +2,9 @@ import urllib3
 import certifi
 from bs4 import BeautifulSoup
 import pandas as pd
+import string
 
-
+#2005 was a strike year, skip it
 
 def SearchTeamAbbreviations():
         Eastern = ['TOR','FLA','MTL','CBJ','BUF',
@@ -54,19 +55,22 @@ def LoadGameStats(url="https://www.hockey-reference.com/boxscores/201710090BUF.h
         candidates = sp.findAll('tr')
         for i in range(starting_point,100):
             column_headers = [th.getText() for th in candidates[i].findAll('th')]
-            print(column_headers)
             try:
                 if column_headers[1] == "iCF":
                     return i
             except:
                 pass
 
-    
 
+    #Download the raw HTML and replace the comment blocks so we can get the advanced analytics
     http = urllib3.PoolManager(cert_reqs='CERT_REQUIRED',ca_certs=certifi.where())
     r = http.request('GET', url).data
+    r = str(r).replace("<!--"," ")
+    r = str(r).replace("-->"," ")
+
+    #Then feed it to BeautifulSoup
     soup = BeautifulSoup(r,'lxml')
-            
+
     header = findBasicHeaders(soup)
     column_headers = [th.getText() for th in soup.findAll('tr',limit=header+1)[header].findAll('th')]
 
@@ -77,8 +81,6 @@ def LoadGameStats(url="https://www.hockey-reference.com/boxscores/201710090BUF.h
                 for i in range(len(data_rows))]
     
     away_df = pd.DataFrame(player_data[2:],columns=column_headers[1:])
-
-
     
     #And home team
     header2 = findBasicHeaders(soup,header+1)
@@ -115,15 +117,20 @@ def LoadGameStats(url="https://www.hockey-reference.com/boxscores/201710090BUF.h
 #    print(home_goalie_df.head)
 
 #Get the away team advanced stats
-#TODO: Somehow this is hidden in comments on the page
+#TODO: Separate power-play vs. 5v5 tables. This info is stored for a single player all together
+# instead of in nice separate tables
+#The 'player' column here is also hard to get because it's stored as a hyperlink label
     header5 = findAdvancedHeaders(soup,header4+1)
-    column_headers = [th.getText() for th in soup.findAll('tr',limit=header5+1)[header].findAll('th')]
+    column_headers = [th.getText() for th in soup.findAll('tr',limit=header5+1)[header5].findAll('th')]
     data_rows = soup.findAll('tr')[header5:header5+20]
     player_data = [[td.getText() for td in data_rows[i].findAll('td')]
                 for i in range(len(data_rows))]
-    away_adv_df = pd.DataFrame(player_data[2:],columns=column_headers[1:])
+    
+    away_adv_df = pd.DataFrame(player_data[1:],columns=column_headers[1:])
     print(away_adv_df)
 
 
+#TODO: Merge tables before sending to calculate advanced stats
+    
 
 LoadGameStats()
